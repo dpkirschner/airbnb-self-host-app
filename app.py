@@ -68,8 +68,6 @@ def submit_email():
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     if current_user.is_authenticated:
-        app.logger.debug(
-            "User already authenticated, redirecting to dashboard")
         return redirect(url_for('admin_dashboard'))
 
     if request.method == 'GET':
@@ -79,29 +77,20 @@ def admin_login():
         username = request.form.get('username')
         password = request.form.get('password')
 
-        app.logger.debug(f"Login attempt for username: {username}")
         try:
             admin = Admin.query.filter_by(username=username).first()
-            app.logger.debug(f"Found admin user: {admin is not None}")
-
             if admin and check_password_hash(admin.password_hash, password):
-                app.logger.debug("Password verified successfully")
                 login_user(admin, remember=True)
-                app.logger.debug(
-                    f"User logged in successfully: {current_user.is_authenticated}"
-                )
                 next_page = request.args.get('next')
                 if next_page and next_page.startswith('/'):
                     return redirect(next_page)
                 return redirect(url_for('admin_dashboard'))
-            else:
-                app.logger.debug("Login failed - invalid credentials")
-                flash('Invalid username or password', 'error')
-                return render_template('admin_login.html')
+            
+            flash('Invalid username or password', 'error')
+            return render_template('admin_login.html')
         except Exception as e:
             app.logger.error(f"Error during login: {str(e)}")
             flash('An error occurred during login', 'error')
-
             return render_template('admin_login.html')
 
 
