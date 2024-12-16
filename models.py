@@ -1,7 +1,9 @@
 from app import db
 from datetime import datetime
 
-class Admin(db.Model):
+from flask_login import UserMixin
+
+class Admin(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)

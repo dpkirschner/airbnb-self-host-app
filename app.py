@@ -4,6 +4,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import LoginManager, login_user, login_required, logout_user, current_user
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -22,7 +23,16 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 
 db.init_app(app)
 
+# Initialize Flask-Login
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'admin_login'
+
 from models import Admin, LeadEmail, PropertyImage
+
+@login_manager.user_loader
+def load_user(user_id):
+    return Admin.query.get(int(user_id))
 
 @app.route('/')
 def index():
@@ -52,24 +62,20 @@ def admin_login():
         app.logger.debug(f"Login attempt for username: {username}")
         admin = Admin.query.filter_by(username=username).first()
         
-        if admin:
-            app.logger.debug("Admin user found")
-            if check_password_hash(admin.password_hash, password):
-                app.logger.debug("Password verified successfully")
-                session['admin_logged_in'] = True
-                return redirect(url_for('admin_dashboard'))
-            else:
-                app.logger.debug("Password verification failed")
+        if admin and check_password_hash(admin.password_hash, password):
+            app.logger.debug("Password verified successfully")
+            login_user(admin)
+            app.logger.debug(f"User logged in successfully: {current_user.is_authenticated}")
+            return redirect(url_for('admin_dashboard'))
         else:
-            app.logger.debug("Admin user not found")
-            
-        flash('Invalid credentials', 'error')
+            app.logger.debug("Login failed")
+            flash('Invalid credentials', 'error')
     return render_template('admin_login.html')
 
 @app.route('/admin')
+@login_required
 def admin_dashboard():
-    if not session.get('admin_logged_in'):
-        return redirect(url_for('admin_login'))
+    app.logger.debug(f"Accessing admin dashboard. User authenticated: {current_user.is_authenticated}")
     leads = LeadEmail.query.all()
     images = PropertyImage.query.all()
     return render_template('admin.html', leads=leads, images=images)
