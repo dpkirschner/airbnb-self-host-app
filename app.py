@@ -49,10 +49,20 @@ def admin_login():
         username = request.form.get('username')
         password = request.form.get('password')
         
+        app.logger.debug(f"Login attempt for username: {username}")
         admin = Admin.query.filter_by(username=username).first()
-        if admin and check_password_hash(admin.password_hash, password):
-            session['admin_logged_in'] = True
-            return redirect(url_for('admin_dashboard'))
+        
+        if admin:
+            app.logger.debug("Admin user found")
+            if check_password_hash(admin.password_hash, password):
+                app.logger.debug("Password verified successfully")
+                session['admin_logged_in'] = True
+                return redirect(url_for('admin_dashboard'))
+            else:
+                app.logger.debug("Password verification failed")
+        else:
+            app.logger.debug("Admin user not found")
+            
         flash('Invalid credentials', 'error')
     return render_template('admin_login.html')
 
@@ -80,12 +90,21 @@ def add_image():
     return redirect(url_for('admin_dashboard'))
 
 with app.app_context():
+    app.logger.debug("Creating database tables...")
     db.create_all()
     # Create default admin if none exists
     if not Admin.query.first():
+        app.logger.debug("No admin user found, creating default admin account...")
         admin = Admin(
             username='admin',
             password_hash=generate_password_hash('admin123')
         )
         db.session.add(admin)
-        db.session.commit()
+        try:
+            db.session.commit()
+            app.logger.debug("Default admin account created successfully")
+        except Exception as e:
+            app.logger.error(f"Error creating admin account: {str(e)}")
+            db.session.rollback()
+    else:
+        app.logger.debug("Admin account already exists")
