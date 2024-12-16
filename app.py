@@ -14,7 +14,7 @@ class Base(DeclarativeBase):
 db = SQLAlchemy(model_class=Base)
 app = Flask(__name__)
 
-app.secret_key = os.environ.get("FLASK_SECRET_KEY") or "your-secret-key-here"
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "your-secret-key-here")
 # Fix the database URL for SQLAlchemy
 database_url = os.environ.get("DATABASE_URL")
 if database_url and database_url.startswith("postgres://"):
@@ -75,6 +75,15 @@ def admin_login():
             if admin and check_password_hash(admin.password_hash, password):
                 app.logger.debug("Password verified successfully")
                 login_user(admin, remember=True)
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('admin_login'))
+
+
                 app.logger.debug(f"User logged in successfully: {current_user.is_authenticated}")
                 next_page = request.args.get('next')
                 if not next_page or not next_page.startswith('/'):
@@ -92,6 +101,8 @@ def admin_login():
 @app.route('/admin')
 @login_required
 def admin_dashboard():
+    if not current_user.is_authenticated:
+        return redirect(url_for('admin_login'))
     app.logger.debug(f"Accessing admin dashboard. User authenticated: {current_user.is_authenticated}")
     leads = LeadEmail.query.all()
     images = PropertyImage.query.all()
