@@ -15,7 +15,11 @@ db = SQLAlchemy(model_class=Base)
 app = Flask(__name__)
 
 app.secret_key = os.environ.get("FLASK_SECRET_KEY") or "your-secret-key-here"
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
+# Fix the database URL for SQLAlchemy
+database_url = os.environ.get("DATABASE_URL")
+if database_url and database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_recycle": 300,
     "pool_pre_ping": True,
@@ -55,21 +59,34 @@ def submit_email():
 
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
+    if current_user.is_authenticated:
+        app.logger.debug("User already authenticated, redirecting to dashboard")
+        return redirect(url_for('admin_dashboard'))
+        
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
         
         app.logger.debug(f"Login attempt for username: {username}")
-        admin = Admin.query.filter_by(username=username).first()
-        
-        if admin and check_password_hash(admin.password_hash, password):
-            app.logger.debug("Password verified successfully")
-            login_user(admin)
-            app.logger.debug(f"User logged in successfully: {current_user.is_authenticated}")
-            return redirect(url_for('admin_dashboard'))
-        else:
-            app.logger.debug("Login failed")
-            flash('Invalid credentials', 'error')
+        try:
+            admin = Admin.query.filter_by(username=username).first()
+            app.logger.debug(f"Found admin user: {admin is not None}")
+            
+            if admin and check_password_hash(admin.password_hash, password):
+                app.logger.debug("Password verified successfully")
+                login_user(admin, remember=True)
+                app.logger.debug(f"User logged in successfully: {current_user.is_authenticated}")
+                next_page = request.args.get('next')
+                if not next_page or not next_page.startswith('/'):
+                    next_page = url_for('admin_dashboard')
+                return redirect(next_page)
+            else:
+                app.logger.debug("Login failed - invalid credentials")
+                flash('Invalid username or password', 'error')
+        except Exception as e:
+            app.logger.error(f"Error during login: {str(e)}")
+            flash('An error occurred during login', 'error')
+            
     return render_template('admin_login.html')
 
 @app.route('/admin')
@@ -81,10 +98,8 @@ def admin_dashboard():
     return render_template('admin.html', leads=leads, images=images)
 
 @app.route('/admin/add_image', methods=['POST'])
+@login_required
 def add_image():
-    if not session.get('admin_logged_in'):
-        return redirect(url_for('admin_login'))
-    
     image_url = request.form.get('image_url')
     caption = request.form.get('caption')
     
