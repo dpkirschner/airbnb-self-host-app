@@ -51,6 +51,7 @@ def index():
 @app.route('/submit_email', methods=['POST'])
 def submit_email():
     email = request.form.get('email')
+    app.logger.debug(f"Submitting Email address: {email}")
     if email:
         existing_email = LeadEmail.query.filter_by(email=email).first()
         if not existing_email:
@@ -90,11 +91,9 @@ def admin_login():
                     f"User logged in successfully: {current_user.is_authenticated}"
                 )
                 next_page = request.args.get('next')
-                if not next_page or not next_page.startswith('/'):
-                    app.logger.debug(
-                        f"Invalid or missing 'next' page: {next_page}")
-                    next_page = url_for('admin_dashboard')
-                return redirect(next_page)
+                if next_page and next_page.startswith('/'):
+                    return redirect(next_page)
+                return redirect(url_for('admin_dashboard'))
             else:
                 app.logger.debug("Login failed - invalid credentials")
                 flash('Invalid username or password', 'error')
