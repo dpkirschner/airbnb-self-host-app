@@ -8,8 +8,10 @@ from flask_login import LoginManager, login_user, login_required, logout_user, c
 
 logging.basicConfig(level=logging.DEBUG)
 
+
 class Base(DeclarativeBase):
     pass
+
 
 db = SQLAlchemy(model_class=Base)
 app = Flask(__name__)
@@ -34,14 +36,17 @@ login_manager.login_view = 'admin_login'
 
 from models import Admin, LeadEmail, PropertyImage
 
+
 @login_manager.user_loader
 def load_user(user_id):
     return Admin.query.get(int(user_id))
+
 
 @app.route('/')
 def index():
     images = PropertyImage.query.all()
     return render_template('index.html', images=images)
+
 
 @app.route('/submit_email', methods=['POST'])
 def submit_email():
@@ -52,29 +57,54 @@ def submit_email():
             new_lead = LeadEmail(email=email)
             db.session.add(new_lead)
             db.session.commit()
-            flash('Thank you for your interest! We\'ll be in touch soon.', 'success')
+            flash('Thank you for your interest! We\'ll be in touch soon.',
+                  'success')
         else:
             flash('You\'re already subscribed!', 'info')
     return redirect(url_for('index'))
 
+
 @app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     if current_user.is_authenticated:
-        app.logger.debug("User already authenticated, redirecting to dashboard")
+        app.logger.debug(
+            "User already authenticated, redirecting to dashboard")
         return redirect(url_for('admin_dashboard'))
-        
+
+    if request.method == 'GET':
+        return render_template('admin_login.html')
+
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
-        
+
         app.logger.debug(f"Login attempt for username: {username}")
         try:
             admin = Admin.query.filter_by(username=username).first()
             app.logger.debug(f"Found admin user: {admin is not None}")
-            
+
             if admin and check_password_hash(admin.password_hash, password):
                 app.logger.debug("Password verified successfully")
                 login_user(admin, remember=True)
+                app.logger.debug(
+                    f"User logged in successfully: {current_user.is_authenticated}"
+                )
+                next_page = request.args.get('next')
+                if not next_page or not next_page.startswith('/'):
+                    app.logger.debug(
+                        f"Invalid or missing 'next' page: {next_page}")
+                    next_page = url_for('admin_dashboard')
+                return redirect(next_page)
+            else:
+                app.logger.debug("Login failed - invalid credentials")
+                flash('Invalid username or password', 'error')
+                return render_template('admin_login.html')
+        except Exception as e:
+            app.logger.error(f"Error during login: {str(e)}")
+            flash('An error occurred during login', 'error')
+
+            return render_template('admin_login.html')
+
 
 @app.route('/logout')
 @login_required
@@ -84,36 +114,23 @@ def logout():
     return redirect(url_for('admin_login'))
 
 
-                app.logger.debug(f"User logged in successfully: {current_user.is_authenticated}")
-                next_page = request.args.get('next')
-                if not next_page or not next_page.startswith('/'):
-                    next_page = url_for('admin_dashboard')
-                return redirect(next_page)
-            else:
-                app.logger.debug("Login failed - invalid credentials")
-                flash('Invalid username or password', 'error')
-        except Exception as e:
-            app.logger.error(f"Error during login: {str(e)}")
-            flash('An error occurred during login', 'error')
-            
-    return render_template('admin_login.html')
-
 @app.route('/admin')
 @login_required
 def admin_dashboard():
-    if not current_user.is_authenticated:
-        return redirect(url_for('admin_login'))
-    app.logger.debug(f"Accessing admin dashboard. User authenticated: {current_user.is_authenticated}")
+    app.logger.debug(
+        f"Accessing admin dashboard. User authenticated: {current_user.is_authenticated}"
+    )
     leads = LeadEmail.query.all()
     images = PropertyImage.query.all()
     return render_template('admin.html', leads=leads, images=images)
+
 
 @app.route('/admin/add_image', methods=['POST'])
 @login_required
 def add_image():
     image_url = request.form.get('image_url')
     caption = request.form.get('caption')
-    
+
     if image_url:
         new_image = PropertyImage(url=image_url, caption=caption)
         db.session.add(new_image)
@@ -121,16 +138,16 @@ def add_image():
         flash('Image added successfully!', 'success')
     return redirect(url_for('admin_dashboard'))
 
+
 with app.app_context():
     app.logger.debug("Creating database tables...")
     db.create_all()
     # Create default admin if none exists
     if not Admin.query.first():
-        app.logger.debug("No admin user found, creating default admin account...")
-        admin = Admin(
-            username='admin',
-            password_hash=generate_password_hash('admin123')
-        )
+        app.logger.debug(
+            "No admin user found, creating default admin account...")
+        admin = Admin(username='admin',
+                      password_hash=generate_password_hash('admin123'))
         db.session.add(admin)
         try:
             db.session.commit()
