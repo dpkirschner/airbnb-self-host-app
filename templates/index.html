@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="hero" style="background-image: url('https://images.unsplash.com/photo-1571896349842-33c89424de2d?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80');">
+    <div class="hero-overlay"></div>
+    <div class="hero-content container">
+        <h1 class="hero-title">Experience Luxury Living</h1>
+        <p class="lead text-white">Your perfect getaway awaits with our premium amenities and stunning views</p>
+        <div class="lead-form">
+            <h3>Get Exclusive Offers</h3>
+            <form id="lead-capture-form" action="{{ url_for('submit_email') }}" method="POST">
+                <div class="mb-3">
+                    <input type="email" class="form-control" name="email" placeholder="Enter your email" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Stay Updated</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<section class="property-features py-5">
+    <div class="container">
+        <h2 class="text-center mb-5">Premium Amenities</h2>
+        <div class="row">
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-hot-tub fa-3x mb-3"></i>
+                        <h5 class="card-title">Luxury Hot Tub</h5>
+                        <p class="card-text">Unwind in our state-of-the-art hot tub with LED lighting and massage jets</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-bed fa-3x mb-3"></i>
+                        <h5 class="card-title">Comfortable Bedrooms</h5>
+                        <p class="card-text">Premium mattresses and luxury linens for the perfect night's sleep</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-body text-center">
+                        <i class="fas fa-wifi fa-3x mb-3"></i>
+                        <h5 class="card-title">High-Speed WiFi</h5>
+                        <p class="card-text">Stay connected with complimentary high-speed internet access</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div class="parallax" style="background-image: url('https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80');"></div>
+
+<section class="gallery py-5">
+    <div class="container">
+        <h2 class="text-center mb-5">Property Gallery</h2>
+        <div class="row">
+            {% for image in images %}
+            <div class="col-md-4 gallery-item">
+                <img src="{{ image.url }}" alt="{{ image.caption }}" class="img-fluid rounded">
+                {% if image.caption %}
+                <p class="text-center mt-2">{{ image.caption }}</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<section class="cta-section">
+    <div class="container text-center">
+        <h2 class="mb-4">Ready to Experience Luxury?</h2>
+        <p class="lead mb-4">Don't miss out on our special offers and availability updates</p>
+        <a href="#" class="btn btn-primary btn-lg">Book Now</a>
+    </div>
+</section>
+{% endblock %}
