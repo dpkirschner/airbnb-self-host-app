@@ -1,5 +1,6 @@
 import os
 import logging
+from datetime import timedelta
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
@@ -17,6 +18,24 @@ db = SQLAlchemy(model_class=Base)
 app = Flask(__name__)
 
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "your-secret-key-here")
+# app.config['SECRET_KEY'] = os.environ.get("FLASK_SECRET_KEY","your-secret-key-here")
+# At the top of your app.py, after creating the Flask app
+app.config.update(SESSION_COOKIE_SECURE=True,
+                  SESSION_COOKIE_HTTPONLY=True,
+                  SESSION_COOKIE_SAMESITE='Lax',
+                  PERMANENT_SESSION_LIFETIME=timedelta(minutes=30),
+                  REMEMBER_COOKIE_SECURE=True,
+                  REMEMBER_COOKIE_HTTPONLY=True,
+                  REMEMBER_COOKIE_DURATION=timedelta(days=14),
+                  SESSION_TYPE='sqlalchemy')
+
+
+# Make sessions permanent by default
+@app.before_request
+def make_session_permanent():
+    session.permanent = True
+
+
 # Fix the database URL for SQLAlchemy
 database_url = os.environ.get("DATABASE_URL")
 if database_url and database_url.startswith("postgres://"):
@@ -33,6 +52,11 @@ db.init_app(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'admin_login'
+login_manager.debug = True
+
+if not app.config['SECRET_KEY']:
+    raise RuntimeError(
+        "FLASK_SECRET_KEY is not set and no default key is provided!")
 
 from models import Admin, LeadEmail, PropertyImage
 
@@ -70,36 +94,55 @@ def admin_login():
     if current_user.is_authenticated:
         return redirect(url_for('admin_dashboard'))
 
-    if request.method == 'GET':
-        return render_template('admin_login.html')
-
     if request.method == 'POST':
         username = request.form.get('username')
         password = request.form.get('password')
 
         try:
             admin = Admin.query.filter_by(username=username).first()
+            app.logger.debug(f"Login attempt for username: {username}")
+
             if admin and check_password_hash(admin.password_hash, password):
+                # Try to log in the user
                 login_user(admin, remember=True)
-                next_page = request.args.get('next')
-                if next_page and next_page.startswith('/'):
-                    return redirect(next_page)
-                return redirect(url_for('admin_dashboard'))
-            
+
+                # Explicitly set session data
+                session['user_id'] = admin.id
+                session['_fresh'] = True
+                session.modified = True
+
+                app.logger.debug(
+                    f"Login successful for user: {admin.username}")
+                app.logger.debug(f"Session after login: {dict(session)}")
+
+                # Force session save
+                db.session.commit()
+
+                return redirect(url_for('admin'))
+
+            app.logger.error("Invalid login credentials")
             flash('Invalid username or password', 'error')
             return render_template('admin_login.html')
+
         except Exception as e:
-            app.logger.error(f"Error during login: {str(e)}")
+            app.logger.error(f"Login error: {str(e)}")
             flash('An error occurred during login', 'error')
             return render_template('admin_login.html')
 
+    return render_template('admin_login.html')
 
-@app.route('/logout')
-@login_required
-def logout():
-    logout_user()
-    flash('You have been logged out.', 'info')
-    return redirect(url_for('admin_login'))
+
+@app.route('/test')
+def test():
+    app.logger.debug(f"Raw session: {request.cookies.get('session')}")
+    app.logger.debug(f"Session contents: {dict(session)}")
+    app.logger.debug(f"Current user type: {type(current_user)}")
+    app.logger.debug(
+        f"Current user authenticated: {current_user.is_authenticated}")
+    app.logger.debug(f"Current user ID: {session.get('user_id')}")
+    app.logger.debug(
+        f"Remember cookie: {request.cookies.get('remember_token')}")
+    return f"Authenticated: {current_user.is_authenticated}"
 
 
 @app.route('/admin')
@@ -111,6 +154,14 @@ def admin_dashboard():
     leads = LeadEmail.query.all()
     images = PropertyImage.query.all()
     return render_template('admin.html', leads=leads, images=images)
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('admin_login'))
 
 
 @app.route('/admin/add_image', methods=['POST'])
